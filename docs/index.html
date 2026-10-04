@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masked Pretraining vs Random Initialization for Object Detection</title>
+<meta name="description" content="How much does masked-image pretraining on unlabeled COCO images help object detection as labels become scarce? A controlled comparison for a transformer (MAE + ViTDet) and a CNN (SparK + Faster R-CNN).">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f6f8;
+    --text: #1c2026;
+    --muted: #5b6470;
+    --border: #dfe3e8;
+    --accent: #1f5fbf;
+    --accent-text: #ffffff;
+    --series-a: #1f5fbf;   /* ViT-Tiny + MAE */
+    --series-b: #c2570c;   /* ResNet-18 + SparK */
+    --todo-bg: #fff6d9;
+    --todo-border: #e3c35a;
+    --todo-text: #5c4a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --surface: #1d2128;
+      --text: #e7eaee;
+      --muted: #a0a8b3;
+      --border: #333a44;
+      --accent: #7db0ff;
+      --accent-text: #0e1116;
+      --series-a: #7db0ff;
+      --series-b: #f0a060;
+      --todo-bg: #3a3212;
+      --todo-border: #7a6620;
+      --todo-text: #f3e2a0;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  main, header .inner, footer .inner { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+  a { color: var(--accent); }
+
+  header { text-align: center; padding: 64px 0 36px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: clamp(1.7rem, 4.5vw, 2.6rem); line-height: 1.2; margin: 0 0 20px; letter-spacing: -0.01em; text-wrap: balance; }
+  .authors { font-size: 1.1rem; margin: 0 0 6px; }
+  .authors span { white-space: nowrap; margin: 0 10px; }
+  .affil { color: var(--muted); margin: 0 0 24px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .btn {
+    display: inline-block; padding: 9px 20px; border-radius: 999px;
+    background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 600; font-size: 0.95rem;
+  }
+  .btn.secondary { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+  .btn.disabled { opacity: 0.5; pointer-events: none; }
+
+  nav { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--border); z-index: 5; }
+  nav ul { list-style: none; margin: 0 auto; padding: 10px 20px; max-width: 860px; display: flex; gap: 22px; overflow-x: auto; white-space: nowrap; font-size: 0.93rem; }
+  nav a { color: var(--muted); text-decoration: none; }
+  nav a:hover { color: var(--accent); }
+
+  section { padding: 44px 0 8px; scroll-margin-top: 36px; }
+  h2 { font-size: 1.5rem; margin: 0 0 14px; }
+  h3 { font-size: 1.08rem; margin: 26px 0 8px; }
+  p { margin: 0 0 16px; }
+  .lead { font-size: 1.12rem; }
+
+  .callout { background: var(--surface); border-left: 4px solid var(--accent); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 0 0 18px; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .label { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+
+  .todo { background: var(--todo-bg); border: 1px dashed var(--todo-border); color: var(--todo-text); padding: 12px 16px; border-radius: 8px; font-size: 0.95rem; margin: 0 0 18px; }
+
+  .table-wrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  th, td { padding: 9px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  thead th { background: var(--surface); font-weight: 600; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th.group { text-align: center; }
+  td.delta { font-weight: 600; }
+
+  /* pipeline diagram */
+  .pipeline { display: grid; gap: 14px; margin: 0 0 18px; }
+  .arm { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .arm-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 10px; }
+  .steps { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+  .step { flex: 1 1 150px; background: var(--surface); border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; line-height: 1.4; }
+  .step b { display: block; }
+  .step small { color: var(--muted); }
+  .arrow { align-self: center; color: var(--muted); font-size: 1.2rem; }
+  @media (max-width: 640px) {
+    .steps { flex-direction: column; }
+    .step { flex: 0 0 auto; }
+    .arrow { transform: rotate(90deg); line-height: 1; }
+  }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 0 0 18px; }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .card h3 { margin: 0 0 6px; }
+  .card p { margin: 0; font-size: 0.95rem; color: var(--muted); }
+
+  figure { margin: 0 0 18px; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+  #chart { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  #chart svg { display: block; width: 100%; height: auto; }
+  #chart .empty { text-align: center; color: var(--muted); padding: 56px 12px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.9rem; margin: 4px 4px 8px; }
+  .legend i { display: inline-block; width: 22px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+
+  ol.refs { padding-left: 22px; font-size: 0.95rem; }
+  ol.refs li { margin-bottom: 8px; }
+
+  footer { border-top: 1px solid var(--border); margin-top: 48px; padding: 24px 0 40px; color: var(--muted); font-size: 0.9rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>Masked Pretraining vs Random Initialization for Object Detection</h1>
+    <!-- EDIT: author names -->
+    <p class="authors"><span>Samantha Salas</span><span>[Partner Name]</span></p>
+    <!-- EDIT: course line -->
+    <p class="affil">CS 5243 &middot; The University of Texas at San Antonio &middot; Fall 2026</p>
+    <div class="buttons">
+      <a class="btn" href="https://github.com/johne16/cs5243_project">Code</a>
+      <a class="btn secondary" href="https://github.com/johne16/cs5243_project/blob/main/proposal.md">Proposal</a>
+      <!-- EDIT: set href and remove "disabled" when the report / slides exist -->
+      <a class="btn secondary disabled" href="#">Report (coming soon)</a>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#question">Question</a></li>
+    <li><a href="#method">Method</a></li>
+    <li><a href="#data">Data</a></li>
+    <li><a href="#metrics">Metrics</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#challenges">Challenges</a></li>
+    <li><a href="#references">References</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section id="overview">
+  <h2>Overview</h2>
+  <p class="lead">Object detectors are usually trained with full supervision: every image carries human-drawn boxes, and the network learns from that signal alone. Box annotation is the expensive part, and accuracy falls sharply when the labeled set is small.</p>
+  <p>Masked-image pretraining offers another source of signal. The backbone first learns from <em>unlabeled</em> images by hiding most of each image and reconstructing what was hidden; only then is the detector fine-tuned on labeled boxes. We measure how much detection accuracy that unlabeled stage buys, how the benefit changes as labels become scarce, and whether it behaves the same way for a transformer backbone and a convolutional one.</p>
+  <p>Prior work reports these gains under different schedules, augmentations, and detection heads, and pretrains on ImageNet-1K before fine-tuning on COCO. We place both backbone families in one shared protocol, pretrain on the same COCO images the detector later trains on so no outside data enters the comparison, and sweep the labeled-set size from 10% to 100%.</p>
+</section>
+
+<section id="question">
+  <h2>Research Question</h2>
+  <div class="callout">
+    <div class="label">Question</div>
+    <p>How much does masked-image pretraining on unlabeled COCO images improve object-detection accuracy over training from random initialization, and how does that gain change as the number of labeled training images shrinks, for both a transformer (ViTDet + MAE) and a CNN (Faster R-CNN + SparK)?</p>
+  </div>
+  <div class="callout">
+    <div class="label">Hypothesis</div>
+    <p>AP drops for both the pretrained and the randomly initialized detector as the labeled fraction shrinks, but more slowly for the pretrained one, so the gap widens at smaller fractions. We expect the transformer to show the larger gap: it lacks the convolutional inductive bias and depends more on what pretraining supplies.</p>
+  </div>
+</section>
+
+<section id="method">
+  <h2>Method</h2>
+  <p>We study two detector and pretraining pairs. Both detectors run in Detectron2, so the detection head, augmentation, schedule, and evaluation code are shared across every run.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Family</th><th>Backbone</th><th>Pretraining</th><th>Detector</th></tr></thead>
+      <tbody>
+        <tr><td>Transformer</td><td>ViT-Tiny</td><td>MAE</td><td>ViTDet (Faster R-CNN head)</td></tr>
+        <tr><td>CNN</td><td>ResNet-18</td><td>SparK</td><td>Faster R-CNN + FPN</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Two arms, one difference</h3>
+  <p>At each labeled fraction the detector is trained twice. The only thing that changes between the two runs is how the backbone starts, so the difference in final AP is what pretraining bought. Detection heads are always randomly initialized.</p>
+  <div class="pipeline">
+    <div class="arm">
+      <div class="arm-title">Pretrained arm</div>
+      <div class="steps">
+        <div class="step"><b>Unlabeled COCO images</b><small>annotations withheld</small></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>Masked pretraining</b><small>MAE or SparK</small></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>Fine-tune detector</b><small>on k% of the labels</small></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>COCO AP</b><small>on val2017</small></div>
+      </div>
+    </div>
+    <div class="arm">
+      <div class="arm-title">Random-initialization arm</div>
+      <div class="steps">
+        <div class="step"><b>Random backbone weights</b><small>no pretraining</small></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>Train detector from scratch</b><small>on the same k% of the labels</small></div>
+        <div class="arrow">&rarr;</div>
+        <div class="step"><b>COCO AP</b><small>on val2017</small></div>
+      </div>
+    </div>
+  </div>
+  <p>With ten labeled fractions (10% to 100%), two arms, and two backbone families, the design is <strong>2 pretraining runs and 40 detection runs</strong>.</p>
+
+  <h3>The pretraining methods</h3>
+  <div class="cards">
+    <div class="card">
+      <h3>MAE</h3>
+      <p>Hides 75% of image patches, encodes only the visible ones with a Vision Transformer, and reconstructs the missing pixels with a light decoder. Only the encoder is kept.</p>
+    </div>
+    <div class="card">
+      <h3>SparK</h3>
+      <p>The convolutional counterpart. Sparse convolutions keep masked regions empty, and a hierarchical decoder lets a plain ConvNet train under the same masked objective.</p>
+    </div>
+    <div class="card">
+      <h3>ViTDet</h3>
+      <p>Uses a plain, non-hierarchical ViT as a detection backbone, building a simple feature pyramid from its single-scale output.</p>
+    </div>
+  </div>
+
+  <h3>Tiny backbones</h3>
+  <p>With two A100 GPUs available, we use the tiny variant of each family rather than the sizes in the original papers. Neither ships as a released config (MAE and ViTDet provide ViT-B and larger; SparK provides ResNet-50 and larger), so both tiny configurations are written by hand.</p>
+</section>
+
+<section id="data">
+  <h2>Data</h2>
+  <p><a href="https://cocodataset.org/">COCO 2017</a> has 118k training images, 5k validation images, and 80 classes with box annotations. Compute limits make the full dataset impractical, so the study runs on a reduced version:</p>
+  <ul>
+    <li><strong>Fixed class subset.</strong> The class list is narrowed to a fixed subset of the 80 categories, applied to both training and validation annotations.</li>
+    <li><strong>Fixed image pool.</strong> A fixed random subset of train2017 images containing those classes is used for the whole study.</li>
+    <li><strong>Same images in both stages.</strong> Pretraining sees the pool with annotations withheld; detection training uses the annotations.</li>
+    <li><strong>Nested label fractions.</strong> The 10% split is contained in the 20% split, and so on; 100% is the full pool.</li>
+    <li><strong>Evaluation.</strong> Always on val2017, restricted to the same class list.</li>
+  </ul>
+  <!-- EDIT: replace with the final class list and pool size -->
+  <div class="todo"><strong>To fill in:</strong> the chosen classes and the number of images in the pool.</div>
+</section>
+
+<section id="metrics">
+  <h2>Metrics</h2>
+  <p>The primary metric is <strong>COCO AP</strong>, averaged over IoU thresholds 0.50 to 0.95 and over the retained classes. The headline result is the AP difference between the pretrained and random-initialization runs at each labeled fraction.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Metric</th><th>What it shows</th></tr></thead>
+      <tbody>
+        <tr><td>AP50</td><td>Loose IoU threshold: was the object found at all?</td></tr>
+        <tr><td>AP75</td><td>Strict IoU threshold: how tightly is the box drawn?</td></tr>
+        <tr><td>AP<sub>S</sub>, AP<sub>M</sub>, AP<sub>L</sub></td><td>AP by object size (under 32&sup2;, 32&sup2; to 96&sup2;, over 96&sup2; pixels): is the gain spread across scales or concentrated in one?</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="results">
+  <h2>Results</h2>
+  <div class="todo" id="results-note"><strong>Experiments in progress.</strong> The table and chart below fill in automatically as numbers are added.</div>
+
+  <figure>
+    <div id="chart"></div>
+    <figcaption>AP gain from masked pretraining (pretrained AP minus random-initialization AP) at each labeled fraction.</figcaption>
+  </figure>
+
+  <div class="table-wrap">
+    <table id="results-table">
+      <thead>
+        <tr>
+          <th rowspan="2">Labels</th>
+          <th class="group" colspan="3">ViT-Tiny (MAE)</th>
+          <th class="group" colspan="3">ResNet-18 (SparK)</th>
+        </tr>
+        <tr>
+          <th class="num">Random</th><th class="num">Pretrained</th><th class="num">&Delta; AP</th>
+          <th class="num">Random</th><th class="num">Pretrained</th><th class="num">&Delta; AP</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- EDIT: replace with a short discussion once results are in -->
+  <div class="todo"><strong>To fill in:</strong> a few sentences on what the results show and whether the hypothesis held.</div>
+</section>
+
+<section id="challenges">
+  <h2>Challenges and Limitations</h2>
+  <ul>
+    <li><strong>Compute.</strong> Two pretraining runs plus forty detection runs force tiny backbones, short schedules, and a reduced image pool, so absolute AP sits well below published values.</li>
+    <li><strong>Unequal arms.</strong> Training from scratch needs a much longer schedule to converge than fine-tuning. A schedule cut short overstates the benefit of pretraining, so we report AP over training to make undertraining visible.</li>
+    <li><strong>Variance at small fractions.</strong> At 10% of labels, run-to-run variance from the sampled images can rival the effect being measured, so small-fraction settings are repeated with different seeds.</li>
+    <li><strong>Integration.</strong> MAE and SparK come from separate codebases with their own conventions for normalization, learning-rate scaling, and layer-wise decay. Porting both into Detectron2 without silently changing one is a real risk.</li>
+  </ul>
+</section>
+
+<section id="references">
+  <h2>References</h2>
+  <ol class="refs">
+    <li>K. He, X. Chen, S. Xie, Y. Li, P. Doll&aacute;r, R. Girshick. <a href="https://arxiv.org/abs/2111.06377">Masked Autoencoders Are Scalable Vision Learners</a>. CVPR 2022.</li>
+    <li>Y. Li, H. Mao, R. Girshick, K. He. <a href="https://arxiv.org/abs/2203.16527">Exploring Plain Vision Transformer Backbones for Object Detection</a>. ECCV 2022.</li>
+    <li>K. Tian, Y. Jiang, Q. Diao, C. Lin, L. Wang, Z. Yuan. <a href="https://arxiv.org/abs/2301.03580">Designing BERT for Convolutional Networks: Sparse and Hierarchical Masked Modeling</a>. ICLR 2023.</li>
+    <li>S. Ren, K. He, R. Girshick, J. Sun. <a href="https://arxiv.org/abs/1506.01497">Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks</a>. NeurIPS 2015.</li>
+    <li>T.-Y. Lin et al. <a href="https://arxiv.org/abs/1405.0312">Microsoft COCO: Common Objects in Context</a>. ECCV 2014.</li>
+    <li>Y. Wu, A. Kirillov, F. Massa, W.-Y. Lo, R. Girshick. <a href="https://github.com/facebookresearch/detectron2">Detectron2</a>. 2019.</li>
+  </ol>
+</section>
+
+</main>
+
+<footer>
+  <div class="inner">CS 5243 course project &middot; <a href="https://github.com/johne16/cs5243_project">github.com/johne16/cs5243_project</a></div>
+</footer>
+
+<script>
+/* ============================================================
+   RESULTS: EDIT HERE.
+   One COCO AP value per labeled fraction, in the order of
+   FRACTIONS. Leave null for runs that are not finished.
+   Example:  scratch: [4.1, 7.9, null, ...]
+   ============================================================ */
+const FRACTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+const RESULTS = {
+  vit: {
+    label: "ViT-Tiny + MAE",
+    scratch:    [null, null, null, null, null, null, null, null, null, null],
+    pretrained: [null, null, null, null, null, null, null, null, null, null]
+  },
+  resnet: {
+    label: "ResNet-18 + SparK",
+    scratch:    [null, null, null, null, null, null, null, null, null, null],
+    pretrained: [null, null, null, null, null, null, null, null, null, null]
+  }
+};
+/* ============================ end of results ============================ */
+
+function fmt(v, signed) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  const s = v.toFixed(1);
+  return signed && v > 0 ? "+" + s : s;
+}
+function deltas(arm) {
+  return FRACTIONS.map((_, i) =>
+    arm.scratch[i] != null && arm.pretrained[i] != null ? arm.pretrained[i] - arm.scratch[i] : null);
+}
+
+function renderTable(results) {
+  const dv = deltas(results.vit), dr = deltas(results.resnet);
+  const rows = FRACTIONS.map((f, i) =>
+    "<tr><td>" + f + "%</td>" +
+    '<td class="num">' + fmt(results.vit.scratch[i]) + "</td>" +
+    '<td class="num">' + fmt(results.vit.pretrained[i]) + "</td>" +
+    '<td class="num delta">' + fmt(dv[i], true) + "</td>" +
+    '<td class="num">' + fmt(results.resnet.scratch[i]) + "</td>" +
+    '<td class="num">' + fmt(results.resnet.pretrained[i]) + "</td>" +
+    '<td class="num delta">' + fmt(dr[i], true) + "</td></tr>");
+  document.querySelector("#results-table tbody").innerHTML = rows.join("");
+}
+
+function renderChart(results) {
+  const el = document.getElementById("chart");
+  const series = [
+    { name: results.vit.label, color: "var(--series-a)", d: deltas(results.vit) },
+    { name: results.resnet.label, color: "var(--series-b)", d: deltas(results.resnet) }
+  ];
+  const all = series.flatMap(s => s.d).filter(v => v !== null);
+  const note = document.getElementById("results-note");
+  if (all.length === 0) {
+    el.innerHTML = '<div class="empty">Chart appears here once the first pretrained / random pair is entered.</div>';
+    note.hidden = false;
+    return;
+  }
+  const total = series.reduce((n, s) => n + s.d.length, 0);
+  note.hidden = all.length === total;
+
+  const W = 760, H = 380, m = { l: 56, r: 20, t: 16, b: 48 };
+  let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
+  if (hi - lo < 1) hi = lo + 1;
+  const step = [0.5, 1, 2, 5, 10, 20].find(s => (hi - lo) / s <= 6) || 20;
+  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const x = f => m.l + (f - 10) / 90 * (W - m.l - m.r);
+  const y = v => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+
+  let g = "";
+  for (let v = lo; v <= hi + 1e-9; v += step) {
+    g += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(v) + '" y2="' + y(v) +
+         '" stroke="var(--border)" stroke-width="' + (Math.abs(v) < 1e-9 ? 1.5 : 1) + '"/>' +
+         '<text x="' + (m.l - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="12" fill="var(--muted)">' +
+         (v > 0 ? "+" : "") + (+v.toFixed(1)) + "</text>";
+  }
+  FRACTIONS.forEach(f => {
+    g += '<text x="' + x(f) + '" y="' + (H - m.b + 18) + '" text-anchor="middle" font-size="12" fill="var(--muted)">' + f + "%</text>";
+  });
+  g += '<text x="' + (m.l + (W - m.l - m.r) / 2) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="13" fill="var(--muted)">Labeled fraction of training pool</text>';
+  g += '<text transform="translate(14,' + (m.t + (H - m.t - m.b) / 2) + ') rotate(-90)" text-anchor="middle" font-size="13" fill="var(--muted)">Δ AP (pretrained − random)</text>';
+
+  series.forEach(s => {
+    let path = "", pen = false, dots = "";
+    s.d.forEach((v, i) => {
+      if (v === null) { pen = false; return; }
+      const px = x(FRACTIONS[i]), py = y(v);
+      path += (pen ? "L" : "M") + px.toFixed(1) + " " + py.toFixed(1) + " ";
+      pen = true;
+      dots += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="4" fill="' + s.color +
+              '"><title>' + s.name + ", " + FRACTIONS[i] + "% labels: " + fmt(v, true) + " AP</title></circle>";
+    });
+    g += '<path d="' + path + '" fill="none" stroke="' + s.color + '" stroke-width="2.5" stroke-linejoin="round"/>' + dots;
+  });
+
+  const legend = series.map(s => '<span><i style="background:' + s.color + '"></i>' + s.name + "</span>").join("");
+  el.innerHTML = '<div class="legend">' + legend + "</div>" +
+    '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="AP gain from pretraining by labeled fraction">' + g + "</svg>";
+}
+
+function render(results) { renderTable(results); renderChart(results); }
+render(RESULTS);
+</script>
+</body>
+</html>
