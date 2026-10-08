@@ -7,7 +7,10 @@
 | `detectron2/` | Fork of facebookresearch/detectron2. Faster R-CNN detection training for the ViT-Tiny and ResNet-18 backbones. |
 | `mae/` | Fork of facebookresearch/mae. MAE pretraining for the ViT-Tiny backbone. |
 | `SparK/` | Fork of keyu-tian/SparK. SparK pretraining for the ResNet-18 backbone. |
-| `notes/` | Reading notes. |
+| `scripts/` | Dataset download script and its requirements. |
+| `datasets/` | Downloaded dataset. Not tracked. |
+| `docs/` | Project web page. |
+| `notes/` | Reading notes and report notes. |
 | `proposal.md` | Project proposal. |
 
 The three forks are git submodules. The root repo records which commit of each fork to use.
@@ -48,12 +51,46 @@ git commit -m "<message>"
 git push
 ```
 
+## Dataset
+
+The study uses a subset of COCO 2017 with 9 classes: person, bicycle, car, motorcycle, airplane, bus, train, truck, boat.
+
+- Training pool: 3000 randomly drawn train2017 images for each of the 7 classes other than person and car, combined.
+- Validation: every val2017 image that contains at least one of the 9 classes.
+- Annotations are kept for the 9 classes only.
+
+The download script has its own environment, separate from the training environments. It needs Python 3.10 or newer. From `scripts/`, create and activate a venv, then:
+
+```
+pip install -r requirements.txt
+```
+
+Download from the repo root:
+
+```
+python scripts/download_coco.py
+```
+
+The script writes:
+
+```
+datasets/coco/
+  train/data/
+  validation/data/
+  annotations/instances_train2017.json
+  annotations/instances_val2017.json
+  raw/
+  scratch/
+```
+
+`raw/` holds the full original annotation files and `scratch/` holds the downloaded annotation zip.
+
 ## MAE pretraining
 
 From `mae/`:
 
 ```
-python main_pretrain.py --model mae_vit_tiny_patch16 --data_path <data_path> --output_dir <output_dir> --log_dir <output_dir>
+python main_pretrain.py --model mae_vit_tiny_patch16 --data_path ../datasets/coco --output_dir <output_dir> --log_dir <output_dir>
 ```
 
 ## SparK pretraining
@@ -61,12 +98,23 @@ python main_pretrain.py --model mae_vit_tiny_patch16 --data_path <data_path> --o
 From `SparK/pretrain/`:
 
 ```
-python main.py --model=resnet18 --data_path=<data_path> --exp_name=<exp_name> --exp_dir=<exp_dir>
+python main.py --model=resnet18 --data_path=../../datasets/coco --exp_name=<exp_name> --exp_dir=<exp_dir>
 ```
+
+## Detection training
+
+Both detection arms import from the `detectron2/` fork, so the fork is the detectron2 that must be installed.
+
+Each run trains on the first `labeled_fraction` of a fixed shuffle of the training pool, so a smaller fraction is a subset of a larger one. The number of iterations is computed from the number of training images in the run.
+
+| Arm | Epochs | Batch size | Warmup | Evaluation and checkpoint period |
+|---|---|---|---|---|
+| ViT | 100 | 64 | 500 iterations | 500 iterations |
+| ResNet-18 | 12 | 16 | 500 iterations | 500 iterations |
 
 ## ViTDet training runs
 
-Run settings are in `detectron2/projects/ViTDet/configs/COCO/faster_rcnn_vitdet_tiny_runs.yaml`, one entry per run. `RUN` selects the entry.
+Run settings are in `detectron2/projects/ViTDet/configs/COCO/faster_rcnn_vitdet_tiny_runs.yaml`, one entry per run. `RUN` selects the entry. The dataset folder is `_coco_dir` in `faster_rcnn_vitdet_tiny.py`, relative to `detectron2/`.
 
 From `detectron2/`:
 
@@ -76,7 +124,7 @@ RUN=pretrained_10 python tools/lazyconfig_train_net.py --config-file projects/Vi
 
 ## ResNet-18 training runs
 
-Run settings are in `SparK/downstream_d2/configs/coco_R_18_FPN_CONV_1x_moco_adam_runs.yaml`, one entry per run. `RUN` selects the entry.
+Run settings are in `SparK/downstream_d2/configs/coco_R_18_FPN_CONV_1x_moco_adam_runs.yaml`, one entry per run. `RUN` selects the entry. The dataset folder is `DATASETS.COCO_DIR` in `coco_R_18_FPN_CONV_1x_moco_adam.yaml`, relative to `SparK/downstream_d2/`.
 
 From `SparK/downstream_d2/`:
 
