@@ -1,0 +1,6 @@
+name: download
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - fiftyone==1.22.1

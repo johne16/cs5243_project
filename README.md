@@ -8,6 +8,7 @@
 | `mae/` | Fork of facebookresearch/mae. MAE pretraining for the ViT-Tiny backbone. |
 | `SparK/` | Fork of keyu-tian/SparK. SparK pretraining for the ResNet-18 backbone. |
 | `scripts/` | Dataset download script and its requirements. |
+| `sbatch_scripts/` | Slurm job scripts for pretraining and detection training. |
 | `datasets/` | Downloaded dataset. Not tracked. |
 | `docs/` | Project web page. |
 | `notes/` | Reading notes and report notes. |
@@ -59,15 +60,16 @@ The study uses a subset of COCO 2017 with 9 classes: person, bicycle, car, motor
 - Validation: every val2017 image that contains at least one of the 9 classes.
 - Annotations are kept for the 9 classes only.
 
-The download script has its own environment, separate from the training environments. It needs Python 3.10 or newer. From `scripts/`, create and activate a venv, then:
+The download script has its own conda environment, `download`, separate from the training environments. Create it from the repo root:
 
 ```
-pip install -r requirements.txt
+conda env create -f environment_download.yml
 ```
 
 Download from the repo root:
 
 ```
+conda activate download
 python scripts/download_coco.py
 ```
 
@@ -154,6 +156,24 @@ From `SparK/downstream_d2/`:
 ```
 RUN=pretrained_10 python train_net.py --config-file configs/coco_R_18_FPN_CONV_1x_moco_adam.yaml
 ```
+
+## Slurm jobs
+
+`sbatch_scripts/` holds one job script per training stage.
+
+> [!IMPORTANT]
+> Submit every job from the repo root. The scripts use paths relative to it and fail from any other folder.
+
+The detection scripts train one run per job. The run name is typed after the script name in the `sbatch` command, and the script reads it as `$1`. It must match an entry in the arm's runs file, such as `pretrained_10` or `scratch_50`.
+
+```
+sbatch sbatch_scripts/pretrain_mae.sh
+sbatch sbatch_scripts/pretrain_spark.sh
+sbatch sbatch_scripts/detect_vit.sh pretrained_10
+sbatch sbatch_scripts/detect_resnet18.sh pretrained_10
+```
+
+Pretraining outputs go to `mae/output` and `SparK/pretrain/output`.
 
 ## Pull upstream changes into a fork
 
