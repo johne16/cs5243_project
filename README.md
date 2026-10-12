@@ -8,7 +8,7 @@
 | `mae/` | Fork of facebookresearch/mae. MAE pretraining for the ViT-Tiny backbone. |
 | `SparK/` | Fork of keyu-tian/SparK. SparK pretraining for the ResNet-18 backbone. |
 | `scripts/` | Dataset download script and its requirements. |
-| `sbatch_scripts/` | Slurm job scripts for pretraining and detection training. |
+| `sbatch_scripts/` | Slurm job scripts for the dataset download, pretraining, and detection training. |
 | `datasets/` | Downloaded dataset. Not tracked. |
 | `docs/` | Project web page. |
 | `notes/` | Reading notes and report notes. |
@@ -159,7 +159,7 @@ RUN=pretrained_10 python train_net.py --config-file configs/coco_R_18_FPN_CONV_1
 
 ## Slurm jobs
 
-`sbatch_scripts/` holds one job script per training stage.
+`sbatch_scripts/` holds one job script for the dataset download and one per training stage.
 
 > [!IMPORTANT]
 > Submit every job from the repo root. The scripts use paths relative to it and fail from any other folder.
@@ -167,6 +167,7 @@ RUN=pretrained_10 python train_net.py --config-file configs/coco_R_18_FPN_CONV_1
 The detection scripts train one run per job. The run name is typed after the script name in the `sbatch` command, and the script reads it as `$1`. It must match an entry in the arm's runs file, such as `pretrained_10` or `scratch_50`.
 
 ```
+sbatch sbatch_scripts/download_coco.sh
 sbatch sbatch_scripts/pretrain_mae.sh
 sbatch sbatch_scripts/pretrain_spark.sh
 sbatch sbatch_scripts/detect_vit.sh pretrained_10
