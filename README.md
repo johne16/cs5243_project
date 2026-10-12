@@ -98,7 +98,7 @@ python main_pretrain.py --model mae_vit_tiny_patch16 --data_path ../datasets/coc
 From `SparK/pretrain/`:
 
 ```
-python main.py --model=resnet18 --data_path=../../datasets/coco --exp_name=<exp_name> --exp_dir=<exp_dir>
+torchrun --nproc_per_node=2 main.py --model=resnet18 --data_path=../../datasets/coco --exp_name=<exp_name> --exp_dir=<exp_dir>
 ```
 
 ## Detection training
@@ -119,7 +119,7 @@ Run settings are in `detectron2/projects/ViTDet/configs/COCO/faster_rcnn_vitdet_
 From `detectron2/`:
 
 ```
-RUN=pretrained_10 python tools/lazyconfig_train_net.py --config-file projects/ViTDet/configs/COCO/faster_rcnn_vitdet_tiny.py
+RUN=pretrained_10 python tools/lazyconfig_train_net.py --num-gpus 2 --config-file projects/ViTDet/configs/COCO/faster_rcnn_vitdet_tiny.py
 ```
 
 ## ResNet-18 training runs
