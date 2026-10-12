@@ -85,6 +85,29 @@ datasets/coco/
 
 `raw/` holds the full original annotation files and `scratch/` holds the downloaded annotation zip.
 
+## Training environments
+
+Training uses two conda environments, separate from the download environment. MAE needs `timm==0.3.2` and SparK needs `timm==0.5.4`.
+
+| Environment | File | Used for |
+|---|---|---|
+| `mae` | `environment_mae.yml` | MAE pretraining |
+| `spark_detectron2` | `environment_spark_detectron2.yml` | SparK pretraining, ViT detection, ResNet-18 detection |
+
+Create both from the repo root:
+
+```
+conda env create -f environment_mae.yml
+conda env create -f environment_spark_detectron2.yml
+```
+
+Install the detectron2 fork into `spark_detectron2` after the environment exists. The build needs gcc and a CUDA 11.3 toolkit.
+
+```
+conda activate spark_detectron2
+pip install -e detectron2
+```
+
 ## MAE pretraining
 
 From `mae/`:

@@ -1,0 +1,17 @@
+name: spark_detectron2
+dependencies:
+  - python=3.8
+  - pip
+  - pip:
+      - --find-links https://download.pytorch.org/whl/torch_stable.html
+      - torch==1.10.0+cu113
+      - torchvision==0.11.1+cu113
+      - timm==0.5.4
+      - numpy<1.24
+      - Pillow<10
+      - setuptools==59.5.0
+      - matplotlib
+      - typed-argument-parser
+      - tensorboardx
+      - tensorboard
+      - pytz
