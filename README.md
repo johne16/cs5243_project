@@ -106,6 +106,7 @@ conda env create -f environment_spark_detectron2.yml
 Install the detectron2 fork into `spark_detectron2` after the environment exists. The build needs gcc and a CUDA 11.3 toolkit.
 
 ```
+module load gcc/9.3.0 cudatoolkit/11.3.1_465.19.01
 conda activate spark_detectron2
 pip install -e detectron2
 ```
