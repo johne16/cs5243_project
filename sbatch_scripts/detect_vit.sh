@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:2
-#SBATCH --time=12:00:00
+#SBATCH --time=28:00:00
 #SBATCH --output=detect-vit-%j.log
 
 source /apps/anaconda3/2024.10-1/etc/profile.d/conda.sh
