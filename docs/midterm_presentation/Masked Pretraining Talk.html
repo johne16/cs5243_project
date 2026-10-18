@@ -1,0 +1,533 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Masked Pretraining Talk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  :root {
+    --bg: #e9ecf1;
+    --slide: #ffffff;
+    --text: #1c2026;
+    --muted: #5b6470;
+    --border: #dfe3e8;
+    --surface: #f4f6f9;
+    --accent: #1f5fbf;
+    --accent-soft: #e8f0fc;
+    --orange: #c2570c;
+    --orange-soft: #fdf0e6;
+    --green: #2a7a3f;
+    --green-soft: #e8f5ec;
+    --todo: #fff3c4;
+    --todo-text: #5c4a00;
+  }
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* ---------- stage: fixed 1280x720, scaled to fit ---------- */
+  #viewport { position: fixed; inset: 0 0 var(--notes-h, 0px) 0; display: grid; place-items: center; }
+  #stage {
+    width: 1280px; height: 720px; position: relative;
+    transform-origin: center center;
+  }
+  .slide {
+    position: absolute; inset: 0;
+    background: var(--slide);
+    border-radius: 6px;
+    box-shadow: 0 6px 30px rgba(20, 30, 50, 0.12);
+    padding: 56px 72px 48px;
+    display: none; flex-direction: column;
+  }
+  .slide.active { display: flex; }
+  .slide aside.notes { display: none; }
+
+  .kicker { font-size: 17px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  h1 { font-size: 54px; line-height: 1.12; margin: 0 0 22px; letter-spacing: -0.015em; }
+  h2 { font-size: 40px; line-height: 1.15; margin: 0 0 28px; letter-spacing: -0.01em; }
+  h3 { font-size: 24px; margin: 0 0 10px; }
+  p, li { font-size: 24px; line-height: 1.45; }
+  p { margin: 0 0 14px; }
+  ul { margin: 0; padding-left: 26px; }
+  li { margin-bottom: 10px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 19px; }
+  .slide-foot { margin-top: auto; display: flex; justify-content: space-between; font-size: 15px; color: var(--muted); padding-top: 14px; }
+
+  /* title slide */
+  .title-slide { justify-content: center; padding-left: 96px; padding-right: 96px; }
+  .title-slide .sub { font-size: 28px; color: var(--muted); max-width: 920px; margin-bottom: 44px; line-height: 1.4; }
+  .title-slide .authors { font-size: 26px; font-weight: 600; margin-bottom: 6px; }
+  .title-slide .affil { font-size: 21px; color: var(--muted); }
+  .title-bar { width: 96px; height: 6px; background: var(--accent); border-radius: 3px; margin-bottom: 30px; }
+
+  /* layout helpers */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; }
+  .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .card { border: 1.5px solid var(--border); border-radius: 12px; padding: 24px 26px; background: var(--slide); }
+  .card p { font-size: 21px; color: var(--muted); margin: 0; }
+  .card .icon { font-size: 34px; margin-bottom: 8px; line-height: 1; }
+  .callout { border-left: 6px solid var(--accent); background: var(--accent-soft); padding: 20px 26px; border-radius: 0 10px 10px 0; margin-bottom: 18px; }
+  .callout.orange { border-color: var(--orange); background: var(--orange-soft); }
+  .callout .label { font-size: 15px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .callout p { margin: 0; font-size: 23px; }
+
+  /* pipeline */
+  .arm { border: 1.5px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; }
+  .arm-title { font-weight: 800; font-size: 18px; margin-bottom: 10px; }
+  .arm.pre .arm-title { color: var(--accent); }
+  .arm.rand .arm-title { color: var(--orange); }
+  .steps { display: flex; align-items: stretch; gap: 10px; }
+  .step { flex: 1; background: var(--surface); border-radius: 8px; padding: 10px 14px; font-size: 18px; line-height: 1.3; }
+  .step b { display: block; }
+  .step small { color: var(--muted); font-size: 15px; }
+  .step.same { outline: 2px dashed var(--muted); outline-offset: -2px; }
+  .arrow { align-self: center; color: var(--muted); font-size: 24px; }
+
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 20px; }
+  thead th { background: var(--surface); font-size: 17px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  tbody tr:last-child td { border-bottom: 0; }
+  .table-box { border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+  .runs { display: flex; align-items: baseline; gap: 14px; margin-top: 18px; font-size: 22px; }
+  .runs .big { font-size: 44px; font-weight: 800; color: var(--accent); }
+
+  /* progress columns */
+  .status h3 { display: flex; align-items: center; gap: 10px; }
+  .pill { font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 12px; border-radius: 999px; }
+  .pill.done { background: var(--green-soft); color: var(--green); }
+  .pill.run { background: var(--accent-soft); color: var(--accent); }
+  .pill.next { background: var(--surface); color: var(--muted); }
+  .status ul { padding-left: 22px; }
+  .status li { font-size: 22px; margin-bottom: 14px; }
+  .fill { background: var(--todo); color: var(--todo-text); padding: 1px 8px; border-radius: 4px; font-weight: 600; }
+
+  /* chart slide */
+  .chart-wrap { border: 1.5px solid var(--border); border-radius: 12px; padding: 18px 18px 10px; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; }
+  .tag { display: inline-block; font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: var(--todo); color: var(--todo-text); padding: 3px 10px; border-radius: 4px; }
+  .reading li { font-size: 21px; }
+
+  /* risk table */
+  .risk td:first-child { font-weight: 700; width: 24%; }
+  .risk td { font-size: 21px; vertical-align: top; padding-top: 16px; padding-bottom: 16px; }
+
+  /* closing */
+  .close { justify-content: center; }
+  .takeaway { font-size: 34px; line-height: 1.35; font-weight: 600; max-width: 1000px; margin-bottom: 36px; }
+  .links { font-size: 22px; color: var(--muted); overflow-wrap: anywhere; }
+  .links b { color: var(--text); }
+
+  /* ---------- controls & notes ---------- */
+  #controls {
+    position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(var(--notes-h, 0px) + 12px + env(safe-area-inset-bottom, 0px));
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,0.92); border: 1px solid var(--border); border-radius: 999px; padding: 4px 6px;
+    font-size: 14px; color: var(--muted); z-index: 10;
+    transition: opacity 0.3s;
+  }
+  #root.hide-ui #controls { opacity: 0; }
+  #root.hide-ui #controls:hover { opacity: 1; }
+  #controls button {
+    border: 0; background: transparent; font: inherit; color: var(--text);
+    padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  }
+  #controls button:hover { background: var(--surface); }
+  #counter { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  #notes {
+    position: fixed; left: 0; right: 0; bottom: 0; height: var(--notes-h, 0px);
+    background: #1d2128; color: #e7eaee; overflow: auto; display: none;
+    padding: 14px 22px 18px; font-size: 18px; line-height: 1.55; z-index: 9;
+  }
+  #root.show-notes #notes { display: block; }
+  #notes .head { display: flex; justify-content: space-between; font-size: 13px; color: #a0a8b3; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  #notes p { font-size: 18px; margin: 0 0 8px; max-width: 1100px; }
+  #timer { font-variant-numeric: tabular-nums; }
+
+
+  /* ---------- phone: stack slides as readable cards, script under each ---------- */
+  body.mobile { overflow: auto; height: auto; padding-block: 16px; }
+  body.mobile #viewport { position: static; display: block; }
+  body.mobile #stage { width: auto; height: auto; transform: none !important; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  body.mobile .slide, body.mobile .slide > *, body.mobile .card, body.mobile .arm { min-width: 0; }
+  body.mobile .slide { display: flex !important; position: relative; inset: auto; height: auto; padding: 22px 18px; gap: 4px; }
+  body.mobile .title-slide { padding: 32px 18px; }
+  body.mobile h1 { font-size: 28px; }
+  body.mobile h2 { font-size: 22px; margin-bottom: 14px; }
+  body.mobile h3 { font-size: 18px; }
+  body.mobile .kicker { font-size: 12px; }
+  body.mobile .slide p, body.mobile .slide li, body.mobile .slide td, body.mobile .callout p, body.mobile .card p, body.mobile .title-slide .sub, body.mobile .title-slide .authors { font-size: 16px !important; }
+  body.mobile .title-slide .affil, body.mobile .small, body.mobile th, body.mobile .step, body.mobile .runs { font-size: 14px !important; }
+  body.mobile .takeaway { font-size: 20px; margin-bottom: 16px; }
+  body.mobile .runs .big { font-size: 30px; }
+  body.mobile .slide [style*="font-size: 40px"] { font-size: 24px !important; margin-top: 20px !important; }
+  body.mobile .two-col, body.mobile .three-col, body.mobile .slide [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; gap: 14px !important; }
+  body.mobile .two-col > *, body.mobile .three-col > *, body.mobile .slide [style*="grid-template-columns"] > * { min-width: 0; }
+  body.mobile .steps { flex-direction: column; }
+  body.mobile .arrow { transform: rotate(90deg); line-height: 1; }
+  body.mobile .table-box { overflow-x: auto; }
+  body.mobile .risk { min-width: 560px; }
+  body.mobile .card { padding: 16px 18px; }
+  body.mobile #controls, body.mobile #notes { display: none !important; }
+  body.mobile .slide aside.notes { display: block; margin-top: 14px; background: #1d2128; color: #e7eaee; border-radius: 8px; padding: 12px 14px; }
+  body.mobile .slide aside.notes::before { content: "Speaker script"; display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #a0a8b3; margin-bottom: 6px; }
+  body.mobile .slide aside.notes p { font-size: 15px !important; color: #e7eaee; margin-bottom: 8px; }
+
+  @media print {
+    body { overflow: visible; background: #fff; }
+    #controls, #notes { display: none !important; }
+    #viewport { position: static; display: block; }
+    #stage { transform: none !important; width: auto; height: auto; }
+    .slide { display: flex !important; position: relative; width: 1280px; height: 720px; box-shadow: none; page-break-after: always; border-radius: 0; }
+  }
+  @page { size: 1280px 720px; margin: 0; }
+</style>
+<div id="root" class="hide-ui">
+
+<div id="viewport"><div id="stage">
+
+<!-- ======================= 1. TITLE ======================= -->
+<section class="slide title-slide">
+  <div class="kicker">CS 5243 &middot; Project Progress</div>
+  <div class="title-bar"></div>
+  <h1>Masked Pretraining vs Random Initialization for Object Detection</h1>
+  <div class="sub">How much does masked-image pretraining help object detection as labeled data becomes scarce?</div>
+  <div class="authors">Samantha Salas &nbsp;&middot;&nbsp; John Edwards</div>
+  <div class="affil">The University of Texas at San Antonio &middot; Fall 2026</div>
+  <aside class="notes">
+    <p>Hi, I'm Samantha Salas, and together with John Edwards we're studying how much masked-image pretraining helps object detection when labeled data is limited.</p>
+    <p>I'll cover our question, how we designed the experiment, where the project stands, and what we expect to find.</p>
+  </aside>
+</section>
+
+<!-- ======================= 2. QUESTION ======================= -->
+<section class="slide">
+  <div class="kicker">Motivation</div>
+  <h2>Labels are expensive. Can unlabeled images make up for fewer of them?</h2>
+  <div class="two-col">
+    <div>
+      <h3>The problem</h3>
+      <ul>
+        <li>Detectors learn from human-drawn boxes on every image.</li>
+        <li>Box annotation is the costly part, and accuracy falls fast when labels are few.</li>
+      </ul>
+      <h3 style="margin-top:22px">The idea</h3>
+      <ul>
+        <li><b>Masked image modeling:</b> hide most of an image and train the backbone to reconstruct it, using no labels.</li>
+        <li>Then fine-tune the detector on the boxes we do have.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="callout">
+        <div class="label">Question</div>
+        <p>How much does masked pretraining improve detection AP over random initialization, and how does the gain change as labels shrink, for a transformer and a CNN?</p>
+      </div>
+      <div class="callout orange">
+        <div class="label">Hypothesis</div>
+        <p>The gap widens as labels shrink, and is larger for the transformer, which lacks a CNN's built-in inductive bias.</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Object detectors normally learn only from human-drawn boxes, and drawing those boxes is the expensive part. With few labels, accuracy drops sharply.</p>
+    <p>Masked image modeling offers another signal: hide most of an image, have the backbone reconstruct it, and learn from unlabeled images before ever seeing a box.</p>
+    <p>Our question is how much that pretraining buys over random initialization, and how the benefit changes as labels shrink. We expect the gap to widen at small label fractions, and to be larger for a Vision Transformer, since it lacks the convolutional inductive bias and leans more on what pretraining provides.</p>
+  </aside>
+</section>
+
+<!-- ======================= 3. CONTROLLED ======================= -->
+<section class="slide">
+  <div class="kicker">Our approach</div>
+  <h2>A controlled comparison, not a leaderboard</h2>
+  <p class="muted" style="margin-bottom:26px">Published gains use different schedules, heads, and ImageNet pretraining, so they are hard to compare. We hold everything fixed except the starting weights.</p>
+  <div class="three-col">
+    <div class="card">
+      <div class="icon">&#9881;</div>
+      <h3>One protocol</h3>
+      <p>Both detectors run in Detectron2 with the same head, augmentation, schedule, and evaluation code.</p>
+    </div>
+    <div class="card">
+      <div class="icon">&#8635;</div>
+      <h3>No outside data</h3>
+      <p>Pretraining uses the same COCO images the detector trains on, with annotations withheld. No ImageNet.</p>
+    </div>
+    <div class="card">
+      <div class="icon">&#8600;</div>
+      <h3>Label sweep</h3>
+      <p>Train on 10% to 100% of the labels in nested splits, to see how the gain changes as labels shrink.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Prior papers report these gains under different schedules and detection heads, and they pretrain on ImageNet, so the numbers aren't directly comparable.</p>
+    <p>We control all of that. Both detectors share one Detectron2 protocol. Pretraining uses the same COCO images the detector later trains on, so no outside data enters. And we sweep the labeled fraction from ten to one hundred percent.</p>
+  </aside>
+</section>
+
+<!-- ======================= 4. DESIGN ======================= -->
+<section class="slide">
+  <div class="kicker">Experimental design</div>
+  <h2>Two arms, one difference: how the backbone starts</h2>
+  <div class="arm pre">
+    <div class="arm-title">Pretrained arm</div>
+    <div class="steps">
+      <div class="step"><b>Unlabeled COCO</b><small>annotations withheld</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step"><b>Masked pretraining</b><small>MAE or SparK</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>Train detector</b><small>on k% of labels</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>COCO AP</b><small>val2017</small></div>
+    </div>
+  </div>
+  <div class="arm rand">
+    <div class="arm-title">Random-initialization arm</div>
+    <div class="steps">
+      <div class="step"><b>Random weights</b><small>no pretraining</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>Train detector</b><small>on the same k% of labels</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>COCO AP</b><small>val2017</small></div>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns: 1.25fr 1fr; gap: 28px; align-items: center; margin-top: 4px">
+    <div class="table-box">
+      <table>
+        <thead><tr><th>Family</th><th>Backbone</th><th>Pretraining</th><th>Detector</th></tr></thead>
+        <tbody>
+          <tr><td>Transformer</td><td>ViT-Tiny</td><td>MAE</td><td>ViTDet</td></tr>
+          <tr><td>CNN</td><td>ResNet-18</td><td>SparK</td><td>Faster R-CNN + FPN</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div class="runs"><span class="big">2 + 40</span><span>runs</span></div>
+      <div class="small muted">2 pretraining runs, then 10 label fractions &times; 2 arms &times; 2 backbones</div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>At every label fraction we train the detector twice. In the pretrained arm, the backbone first learns from unlabeled images with MAE or SparK. In the random arm, it starts from random weights. Everything after that is identical, so the difference in AP is what pretraining bought.</p>
+    <p>We test two families: a ViT-Tiny with MAE in ViTDet, and a ResNet-18 with SparK in Faster R-CNN. We use tiny backbones to fit our compute. That gives two pretraining runs and forty detection runs.</p>
+  </aside>
+</section>
+
+<!-- ======================= 5. PROGRESS ======================= -->
+<section class="slide">
+  <div class="kicker">Where we are</div>
+  <h2>Pretraining finished; the random-init runs are training</h2>
+  <div class="three-col status">
+    <div class="card">
+      <h3><span class="pill done">Done</span></h3>
+      <ul>
+        <li>COCO 2017 subset prepared on UTSA's Arc cluster: 18,542 training images</li>
+        <li>Detectron2 built, with checkpoint resume for long jobs</li>
+        <li>Tiny ViT and ResNet-18 detector configs written by hand (neither ships officially)</li>
+        <li><b>MAE and SparK pretraining finished</b> on the unlabeled COCO images</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="pill run">Running</span></h3>
+      <ul>
+        <li>All <b>20 random-init detection runs</b> submitted: 2 backbones &times; 10 label fractions</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="pill next">Next</span></h3>
+      <ul>
+        <li>20 fine-tuning runs from the pretrained weights</li>
+        <li>Evaluate all 40 on val2017</li>
+        <li>Compare AP gaps across fractions and backbones</li>
+      </ul>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Here's where things stand. The COCO subset is prepared on UTSA's Arc cluster, eighteen thousand five hundred training images. Detectron2 is built with checkpoint resuming so long jobs survive time limits, and we wrote the tiny ViT and ResNet-18 configs ourselves, since neither ships with the original code.</p>
+    <p>John's MAE and SparK pretraining runs have finished, and all twenty random-initialization runs are training now. Next, we fine-tune the other twenty detectors from the pretrained weights and evaluate everything on val2017.</p>
+  </aside>
+</section>
+
+<!-- ======================= 6. EXPECTED RESULT ======================= -->
+<section class="slide">
+  <div class="kicker">What we will measure</div>
+  <h2>The headline result: AP gain at each label fraction</h2>
+  <div style="display:grid; grid-template-columns: 1.15fr 1fr; gap: 36px; flex: 1; align-items: start">
+    <div>
+      <div class="chart-wrap">
+        <svg viewBox="0 0 600 340" role="img" aria-label="Illustrative sketch of the hypothesized AP gain by labeled fraction">
+          <!-- axes -->
+          <line x1="60" y1="20" x2="60" y2="280" stroke="#dfe3e8" stroke-width="1.5"/>
+          <line x1="60" y1="280" x2="580" y2="280" stroke="#9aa3ae" stroke-width="1.5"/>
+          <g stroke="#eef0f3"><line x1="60" y1="215" x2="580" y2="215"/><line x1="60" y1="150" x2="580" y2="150"/><line x1="60" y1="85" x2="580" y2="85"/></g>
+          <text x="52" y="285" text-anchor="end" font-size="15" fill="#5b6470">0</text>
+          <g font-size="15" fill="#5b6470" text-anchor="middle">
+            <text x="60" y="304">10%</text><text x="233" y="304">40%</text><text x="407" y="304">70%</text><text x="580" y="304">100%</text>
+          </g>
+          <text x="320" y="332" text-anchor="middle" font-size="16" fill="#5b6470">Labeled fraction</text>
+          <text transform="translate(22,150) rotate(-90)" text-anchor="middle" font-size="16" fill="#5b6470">&Delta; AP (pretrained &minus; random)</text>
+          <!-- hypothesized curves -->
+          <path d="M60 50 C 180 120, 330 185, 580 215" fill="none" stroke="#1f5fbf" stroke-width="4" stroke-dasharray="10 7" stroke-linecap="round"/>
+          <path d="M60 140 C 180 185, 330 225, 580 245" fill="none" stroke="#c2570c" stroke-width="4" stroke-dasharray="10 7" stroke-linecap="round"/>
+          <text x="140" y="58" font-size="17" font-weight="700" fill="#1f5fbf">ViT-Tiny + MAE</text>
+          <text x="300" y="262" font-size="17" font-weight="700" fill="#c2570c">ResNet-18 + SparK</text>
+        </svg>
+      </div>
+      <div style="margin-top:10px"><span class="tag">Illustrative &middot; hypothesis, not data</span></div>
+    </div>
+    <div class="reading">
+      <h3>How we'll read it</h3>
+      <ul>
+        <li><b>Curve falls left to right:</b> pretraining matters most when labels are scarce.</li>
+        <li><b>Flat curve:</b> pretraining adds a constant boost, regardless of label count.</li>
+        <li><b>ViT above ResNet:</b> transformers depend more on pretraining.</li>
+      </ul>
+      <p class="small muted" style="margin-top:14px">Secondary metrics: AP50, AP75, and AP by object size, to see where the gain comes from.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Our main result will be this plot: the AP gain from pretraining at each label fraction. What's shown is our hypothesis, not data.</p>
+    <p>If the curve falls from left to right, pretraining matters most when labels are scarce. A flat curve means it's a constant boost. And if the ViT curve sits above the ResNet curve, transformers rely more on pretraining. We'll also break AP down by IoU threshold and object size to see where the gain comes from.</p>
+  </aside>
+</section>
+
+<!-- ======================= 7. RISKS ======================= -->
+<section class="slide">
+  <div class="kicker">Challenges</div>
+  <h2>What could bias the result, and how we handle it</h2>
+  <div class="table-box">
+    <table class="risk">
+      <thead><tr><th>Risk</th><th>Why it matters</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Undertrained scratch arm</td><td>From-scratch training converges slower; a short schedule overstates pretraining's benefit</td><td>Report AP over training so undertraining is visible</td></tr>
+        <tr><td>Noise at 10% labels</td><td>Which images get sampled can swing AP as much as the effect itself</td><td>Repeat small fractions with different seeds</td></tr>
+        <tr><td>Porting two codebases</td><td>MAE and SparK differ in normalization, LR scaling, and layer decay</td><td>One shared Detectron2 pipeline; check settings against the originals</td></tr>
+        <tr><td>Limited compute</td><td>Tiny backbones and a reduced pool put absolute AP below published values</td><td>Compare gaps between arms, not absolute AP</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="notes">
+    <p>A few things could bias the comparison. The biggest is that training from scratch converges slower, so a short schedule would exaggerate pretraining's benefit; we'll report AP over the course of training to make that visible.</p>
+    <p>At ten percent of labels, sampling noise can be as large as the effect, so we repeat those runs with different seeds. Porting two codebases into Detectron2 risks silently changing one arm, so we check settings against the originals. And because of compute, our absolute AP will be low, so we focus on the gap, not the raw number.</p>
+  </aside>
+</section>
+
+<!-- ======================= 8. CLOSE ======================= -->
+<section class="slide close">
+  <div class="kicker">Summary</div>
+  <div class="takeaway">One controlled protocol, two backbone families, ten label fractions: a direct measure of what unlabeled images are worth when boxes are scarce.</div>
+  <div class="links">
+    <div><b>Code:</b> github.com/johne16/cs5243_project</div>
+  </div>
+  <div style="margin-top:56px; font-size: 40px; font-weight: 700">Thank you</div>
+  <aside class="notes">
+    <p>To sum up: with one shared protocol, two backbone families, and ten label fractions, we'll get a direct measure of what unlabeled images are worth when labeled boxes are scarce. Thanks for watching.</p>
+  </aside>
+</section>
+
+</div></div>
+
+<div id="controls">
+  <button id="prev" title="Previous (&larr;)">&#8592;</button>
+  <span id="counter">1 / 8</span>
+  <button id="next" title="Next (&rarr;)">&#8594;</button>
+  <button id="notesBtn" title="Speaker notes (N)">Notes</button>
+  <button id="fsBtn" title="Fullscreen (F)">&#x26F6;</button>
+</div>
+
+<div id="notes">
+  <div class="head"><span id="notesTitle">Speaker notes</span><span>Elapsed <span id="timer">0:00</span> &middot; target 3–5 min</span></div>
+  <div id="notesBody"></div>
+</div>
+
+<script>
+(function () {
+  const root = document.getElementById("root");
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const stage = document.getElementById("stage");
+  const counter = document.getElementById("counter");
+  const notesBody = document.getElementById("notesBody");
+  const notesTitle = document.getElementById("notesTitle");
+  let i = 0;
+  const fromHash = parseInt(location.hash.slice(1), 10);
+  if (fromHash >= 1 && fromHash <= slides.length) i = fromHash - 1;
+
+  function fit() {
+    const narrow = window.innerWidth < 760;
+    document.body.classList.toggle("mobile", narrow);
+    if (narrow) { document.documentElement.style.setProperty("--notes-h", "0px"); stage.style.transform = "none"; return; }
+    const notesH = root.classList.contains("show-notes") ? Math.round(window.innerHeight * 0.3) : 0;
+    document.documentElement.style.setProperty("--notes-h", notesH + "px");
+    const w = window.innerWidth, h = window.innerHeight - notesH;
+    const s = Math.min((w - 32) / 1280, h / 720) * 0.97;
+    stage.style.transform = "scale(" + s + ")";
+  }
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle("active", k === i));
+    counter.textContent = (i + 1) + " / " + slides.length;
+    const notes = slides[i].querySelector("aside.notes");
+    notesBody.innerHTML = notes ? notes.innerHTML : "";
+    notesTitle.textContent = "Speaker notes · slide " + (i + 1);
+    try { history.replaceState(null, "", "#" + (i + 1)); } catch (e) {}
+  }
+
+  // timer starts on first navigation
+  let start = null;
+  const timerEl = document.getElementById("timer");
+  setInterval(() => {
+    if (!start) return;
+    const s = Math.floor((Date.now() - start) / 1000);
+    timerEl.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }, 500);
+  function go(n) { if (!start && n !== i) start = Date.now(); show(n); }
+
+  function toggleNotes() { root.classList.toggle("show-notes"); fit(); }
+  function toggleFs() {
+    if (!document.fullscreenElement) { try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+    else { try { document.exitFullscreen(); } catch (e) {} }
+  }
+
+  document.addEventListener("keydown", e => {
+    if (["ArrowRight", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); go(i + 1); }
+    else if (["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); go(i - 1); }
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(slides.length - 1);
+    else if (e.key === "n" || e.key === "N") toggleNotes();
+    else if (e.key === "f" || e.key === "F") toggleFs();
+    else if (e.key === "t" || e.key === "T") { start = Date.now(); timerEl.textContent = "0:00"; }
+  });
+  document.getElementById("prev").onclick = () => go(i - 1);
+  document.getElementById("next").onclick = () => go(i + 1);
+  document.getElementById("notesBtn").onclick = toggleNotes;
+  document.getElementById("fsBtn").onclick = toggleFs;
+
+  let tx = null;
+  document.addEventListener("touchstart", e => { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener("touchend", e => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) go(i + (dx < 0 ? 1 : -1));
+    tx = null;
+  });
+
+  // show controls briefly on mouse move, then fade for clean recording
+  let hideT;
+  document.addEventListener("mousemove", () => {
+    root.classList.remove("hide-ui");
+    clearTimeout(hideT);
+    hideT = setTimeout(() => root.classList.add("hide-ui"), 2000);
+  });
+
+  window.addEventListener("resize", fit);
+  fit(); show(i);
+})();
+</script>
+</div>
+
+</body></html>
