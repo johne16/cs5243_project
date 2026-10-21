@@ -13,6 +13,15 @@ Iterations are computed per run as epochs * training images / batch size, so eve
 
 The comparison in this study is pretrained against scratch within each arm, and both runs of a pair use the same schedule.
 
+## ViT batch size and learning rate
+
+| | Batch size | Images per GPU | Learning rate |
+|---|---|---|---|
+| ViTDet `mask_rcnn_vitdet_b_100ep.py` | 64 | 1 on 64 GPUs | 1e-4 |
+| This study | 16 | 8 on 2 GPUs | 2.5e-5 |
+
+The batch size was reduced to fit 2 V100 GPUs with 32 GB each. At 16 images per GPU, training ran out of memory in a global attention block, which builds a 4096 by 4096 attention matrix per image and head at 1024 pixel input. The learning rate is scaled linearly with the batch size.
+
 ## Warmup
 
 Both arms use 500 warmup iterations at every labeled fraction. The value is an arbitrary choice.
