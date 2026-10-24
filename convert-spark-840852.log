@@ -1,0 +1,1 @@
+[convert] .pkl is generated! (from `../pretrain/output/resnet18_1kpretrained_timm_style.pth`, to `../pretrain/output/resnet18_1kpretrained_d2_style.pkl`, len(state)==120)
