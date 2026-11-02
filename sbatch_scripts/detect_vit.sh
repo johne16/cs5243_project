@@ -13,4 +13,4 @@ conda activate spark_detectron2
 
 cd detectron2
 # $1 is the run name, such as pretrained_10
-RUN=$1 python tools/lazyconfig_train_net.py --num-gpus 2 --config-file projects/ViTDet/configs/COCO/faster_rcnn_vitdet_tiny.py
+RUN=$1 python tools/lazyconfig_train_net.py --num-gpus 2 --config-file projects/ViTDet/configs/COCO/faster_rcnn_vitdet_tiny.py --resume
