@@ -135,7 +135,7 @@ Each run trains on the first `labeled_fraction` of a fixed shuffle of the traini
 
 | Arm | Epochs | Batch size | Warmup | Evaluation and checkpoint period |
 |---|---|---|---|---|
-| ViT | 100 | 64 | 500 iterations | 500 iterations |
+| ViT | 100 | 16 | 500 iterations | 500 iterations |
 | ResNet-18 | 12 | 16 | 500 iterations | 500 iterations |
 
 ## ViTDet training runs
