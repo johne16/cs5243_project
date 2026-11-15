@@ -1,0 +1,589 @@
+<title>Masked Pretraining Final Talk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  :root {
+    --bg: #e9ecf1;
+    --slide: #ffffff;
+    --text: #1c2026;
+    --muted: #5b6470;
+    --border: #dfe3e8;
+    --surface: #f4f6f9;
+    --accent: #1f5fbf;
+    --accent-soft: #e8f0fc;
+    --orange: #c2570c;
+    --orange-soft: #fdf0e6;
+    --green: #2a7a3f;
+    --green-soft: #e8f5ec;
+    --todo: #fff3c4;
+    --todo-text: #5c4a00;
+  }
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  /* ---------- stage: fixed 1280x720, scaled to fit ---------- */
+  #viewport { position: fixed; inset: 0 0 var(--notes-h, 0px) 0; display: grid; place-items: center; }
+  #stage {
+    width: 1280px; height: 720px; position: relative;
+    transform-origin: center center;
+  }
+  .slide {
+    position: absolute; inset: 0;
+    background: var(--slide);
+    border-radius: 6px;
+    box-shadow: 0 6px 30px rgba(20, 30, 50, 0.12);
+    padding: 56px 72px 48px;
+    display: none; flex-direction: column;
+  }
+  .slide.active { display: flex; }
+  .slide aside.notes { display: none; }
+
+  .kicker { font-size: 17px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  h1 { font-size: 54px; line-height: 1.12; margin: 0 0 22px; letter-spacing: -0.015em; }
+  h2 { font-size: 40px; line-height: 1.15; margin: 0 0 28px; letter-spacing: -0.01em; }
+  h3 { font-size: 24px; margin: 0 0 10px; }
+  p, li { font-size: 24px; line-height: 1.45; }
+  p { margin: 0 0 14px; }
+  ul { margin: 0; padding-left: 26px; }
+  li { margin-bottom: 10px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 19px; }
+  .slide-foot { margin-top: auto; display: flex; justify-content: space-between; font-size: 15px; color: var(--muted); padding-top: 14px; }
+
+  /* title slide */
+  .title-slide { justify-content: center; padding-left: 96px; padding-right: 96px; }
+  .title-slide .sub { font-size: 28px; color: var(--muted); max-width: 920px; margin-bottom: 44px; line-height: 1.4; }
+  .title-slide .authors { font-size: 26px; font-weight: 600; margin-bottom: 6px; }
+  .title-slide .affil { font-size: 21px; color: var(--muted); }
+  .title-bar { width: 96px; height: 6px; background: var(--accent); border-radius: 3px; margin-bottom: 30px; }
+
+  /* layout helpers */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; flex: 1; }
+  .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .card { border: 1.5px solid var(--border); border-radius: 12px; padding: 24px 26px; background: var(--slide); }
+  .card p { font-size: 21px; color: var(--muted); margin: 0; }
+  .card .icon { font-size: 34px; margin-bottom: 8px; line-height: 1; }
+  .callout { border-left: 6px solid var(--accent); background: var(--accent-soft); padding: 20px 26px; border-radius: 0 10px 10px 0; margin-bottom: 18px; }
+  .callout.orange { border-color: var(--orange); background: var(--orange-soft); }
+  .callout .label { font-size: 15px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .callout p { margin: 0; font-size: 23px; }
+
+  /* pipeline */
+  .arm { border: 1.5px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; }
+  .arm-title { font-weight: 800; font-size: 18px; margin-bottom: 10px; }
+  .arm.pre .arm-title { color: var(--accent); }
+  .arm.rand .arm-title { color: var(--orange); }
+  .steps { display: flex; align-items: stretch; gap: 10px; }
+  .step { flex: 1; background: var(--surface); border-radius: 8px; padding: 10px 14px; font-size: 18px; line-height: 1.3; }
+  .step b { display: block; }
+  .step small { color: var(--muted); font-size: 15px; }
+  .step.same { outline: 2px dashed var(--muted); outline-offset: -2px; }
+  .arrow { align-self: center; color: var(--muted); font-size: 24px; }
+
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 20px; }
+  thead th { background: var(--surface); font-size: 17px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  tbody tr:last-child td { border-bottom: 0; }
+  .table-box { border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+  .runs { display: flex; align-items: baseline; gap: 14px; margin-top: 18px; font-size: 22px; }
+  .runs .big { font-size: 44px; font-weight: 800; color: var(--accent); }
+
+  /* progress columns */
+  .status h3 { display: flex; align-items: center; gap: 10px; }
+  .pill { font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 12px; border-radius: 999px; }
+  .pill.done { background: var(--green-soft); color: var(--green); }
+  .pill.run { background: var(--accent-soft); color: var(--accent); }
+  .pill.next { background: var(--surface); color: var(--muted); }
+  .status ul { padding-left: 22px; }
+  .status li { font-size: 22px; margin-bottom: 14px; }
+  .fill { background: var(--todo); color: var(--todo-text); padding: 1px 8px; border-radius: 4px; font-weight: 600; }
+
+  /* chart slide */
+  .chart-wrap { border: 1.5px solid var(--border); border-radius: 12px; padding: 18px 18px 10px; }
+  .chart-wrap svg { display: block; width: 100%; height: auto; }
+  .tag { display: inline-block; font-size: 14px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: var(--todo); color: var(--todo-text); padding: 3px 10px; border-radius: 4px; }
+  .reading li { font-size: 21px; }
+
+  /* risk table */
+  .risk td:first-child { font-weight: 700; width: 24%; }
+  .risk td { font-size: 21px; vertical-align: top; padding-top: 16px; padding-bottom: 16px; }
+
+  /* closing */
+  .close { justify-content: center; }
+  .takeaway { font-size: 34px; line-height: 1.35; font-weight: 600; max-width: 1000px; margin-bottom: 36px; }
+  .links { font-size: 22px; color: var(--muted); overflow-wrap: anywhere; }
+  .links b { color: var(--text); }
+
+  /* ---------- controls & notes ---------- */
+  #controls {
+    position: fixed; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(var(--notes-h, 0px) + 12px + env(safe-area-inset-bottom, 0px));
+    display: flex; gap: 6px; align-items: center;
+    background: rgba(255,255,255,0.92); border: 1px solid var(--border); border-radius: 999px; padding: 4px 6px;
+    font-size: 14px; color: var(--muted); z-index: 10;
+    transition: opacity 0.3s;
+  }
+  #root.hide-ui #controls { opacity: 0; }
+  #root.hide-ui #controls:hover { opacity: 1; }
+  #controls button {
+    border: 0; background: transparent; font: inherit; color: var(--text);
+    padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  }
+  #controls button:hover { background: var(--surface); }
+  #counter { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  #notes {
+    position: fixed; left: 0; right: 0; bottom: 0; height: var(--notes-h, 0px);
+    background: #1d2128; color: #e7eaee; overflow: auto; display: none;
+    padding: 14px 22px 18px; font-size: 18px; line-height: 1.55; z-index: 9;
+  }
+  #root.show-notes #notes { display: block; }
+  #notes .head { display: flex; justify-content: space-between; font-size: 13px; color: #a0a8b3; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  #notes p { font-size: 18px; margin: 0 0 8px; max-width: 1100px; }
+  #timer { font-variant-numeric: tabular-nums; }
+
+
+  /* ---------- phone: stack slides as readable cards, script under each ---------- */
+  body.mobile { overflow: auto; height: auto; padding-block: 16px; }
+  body.mobile #viewport { position: static; display: block; }
+  body.mobile #stage { width: auto; height: auto; transform: none !important; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  body.mobile .slide, body.mobile .slide > *, body.mobile .card, body.mobile .arm { min-width: 0; }
+  body.mobile .slide { display: flex !important; position: relative; inset: auto; height: auto; padding: 22px 18px; gap: 4px; }
+  body.mobile .title-slide { padding: 32px 18px; }
+  body.mobile h1 { font-size: 28px; }
+  body.mobile h2 { font-size: 22px; margin-bottom: 14px; }
+  body.mobile h3 { font-size: 18px; }
+  body.mobile .kicker { font-size: 12px; }
+  body.mobile .slide p, body.mobile .slide li, body.mobile .slide td, body.mobile .callout p, body.mobile .card p, body.mobile .title-slide .sub, body.mobile .title-slide .authors { font-size: 16px !important; }
+  body.mobile .title-slide .affil, body.mobile .small, body.mobile th, body.mobile .step, body.mobile .runs { font-size: 14px !important; }
+  body.mobile .takeaway { font-size: 20px; margin-bottom: 16px; }
+  body.mobile .runs .big { font-size: 30px; }
+  body.mobile .slide [style*="font-size: 40px"] { font-size: 24px !important; margin-top: 20px !important; }
+  body.mobile .two-col, body.mobile .three-col, body.mobile .slide [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; gap: 14px !important; }
+  body.mobile .two-col > *, body.mobile .three-col > *, body.mobile .slide [style*="grid-template-columns"] > * { min-width: 0; }
+  body.mobile .steps { flex-direction: column; }
+  body.mobile .arrow { transform: rotate(90deg); line-height: 1; }
+  body.mobile .table-box { overflow-x: auto; }
+  body.mobile .risk { min-width: 560px; }
+  body.mobile .card { padding: 16px 18px; }
+  body.mobile #controls, body.mobile #notes { display: none !important; }
+  body.mobile .slide aside.notes { display: block; margin-top: 14px; background: #1d2128; color: #e7eaee; border-radius: 8px; padding: 12px 14px; }
+  body.mobile .slide aside.notes::before { content: "Speaker script"; display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #a0a8b3; margin-bottom: 6px; }
+  body.mobile .slide aside.notes p { font-size: 15px !important; color: #e7eaee; margin-bottom: 8px; }
+
+  @media print {
+    body { overflow: visible; background: #fff; }
+    #controls, #notes { display: none !important; }
+    #viewport { position: static; display: block; }
+    #stage { transform: none !important; width: auto; height: auto; }
+    .slide { display: flex !important; position: relative; width: 1280px; height: 720px; box-shadow: none; page-break-after: always; border-radius: 0; }
+  }
+  @page { size: 1280px 720px; margin: 0; }
+
+  .figure { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  .figure img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  th.num { text-align: right; }
+  .verdict { display: flex; flex-direction: column; gap: 14px; }
+  .verdict .callout { margin-bottom: 0; }
+  .callout.green { border-color: var(--green); background: var(--green-soft); }
+</style>
+<div id="root" class="hide-ui">
+
+<div id="viewport"><div id="stage">
+
+<!-- ======================= 1. TITLE ======================= -->
+<section class="slide title-slide">
+  <div class="kicker">CS 5243 &middot; Final Presentation</div>
+  <div class="title-bar"></div>
+  <h1>Masked Pretraining vs Random Initialization for Object Detection</h1>
+  <div class="sub">How much does masked-image pretraining help object detection as labeled data becomes scarce?</div>
+  <div class="authors">Samantha Salas &nbsp;&middot;&nbsp; John Edwards</div>
+  <div class="affil">The University of Texas at San Antonio &middot; Fall 2026</div>
+  <aside class="notes">
+    <p>Hi, we're Samantha Salas and John Edwards. Our project measures the value of masked-image pretraining for object detection when only part of the training set is annotated.</p>
+    <p>We'll cover the motivation, related work, how we set up the comparison, the experiments, our results, the limitations, and future work.</p>
+  </aside>
+</section>
+
+<!-- ======================= 2. MOTIVATION ======================= -->
+<section class="slide">
+  <div class="kicker">Motivation</div>
+  <h2>Labels are expensive. Can unlabeled images make up for fewer of them?</h2>
+  <div class="two-col">
+    <div>
+      <h3>The problem</h3>
+      <ul>
+        <li>Detectors learn from human-drawn boxes on every image.</li>
+        <li>Box annotation is the costly part, and accuracy falls when labels are scarce.</li>
+      </ul>
+      <h3 style="margin-top:22px">The idea</h3>
+      <ul>
+        <li><b>Masked image modeling:</b> hide most of an image and train the backbone to reconstruct it, using no labels.</li>
+        <li>Then fine-tune the detector on the boxes we do have.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="callout">
+        <div class="label">Question</div>
+        <p>How much does masked pretraining on unlabeled images help, and how does that change as labels shrink?</p>
+      </div>
+      <div class="callout orange">
+        <div class="label">Hypothesis</div>
+        <p>The fewer the labels, the more pretraining helps. It helps the ViT more than the ResNet-18, because a ViT has to learn from data that nearby pixels are related, while a CNN has that built in.</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Supervised detector training requires a bounding box for every object in every training image. Producing those annotations is costly, and detection accuracy degrades as the annotated set gets smaller.</p>
+    <p>Masked image modeling is a self-supervised alternative for the backbone. A large portion of each image is hidden, and the backbone is trained to reconstruct it, which requires no annotations. The detector is then fine-tuned on the annotated images.</p>
+    <p>We measure what this pretraining stage contributes and how that contribution changes with the amount of annotated data. We expected the contribution to grow as annotations become scarcer, and to be larger for the Vision Transformer, since convolutions restrict each layer to neighboring pixels by design, while a transformer must learn that relationship from data.</p>
+  </aside>
+</section>
+
+<!-- ======================= 3. RELATED WORK ======================= -->
+<section class="slide">
+  <div class="kicker">Related work</div>
+  <h2>Three methods, each measured on its own terms</h2>
+  <div class="three-col" style="margin-bottom:26px">
+    <div class="card">
+      <h3>MAE</h3>
+      <p>He et al., 2022. Hides 75% of image patches, encodes only the visible ones, and reconstructs the missing pixels.</p>
+    </div>
+    <div class="card">
+      <h3>ViTDet</h3>
+      <p>Li et al., 2022. A plain ViT pretrained with MAE is a competitive detection backbone without a pyramid design.</p>
+    </div>
+    <div class="card">
+      <h3>SparK</h3>
+      <p>Tian et al., 2023. The CNN counterpart: sparse convolutions and a hierarchical decoder bring masked pretraining to ResNets.</p>
+    </div>
+  </div>
+  <div class="callout orange">
+    <div class="label">The gap</div>
+    <p>No shared protocol across papers, no sweep over labeled-set size, and pretraining on ImageNet, outside the detection data.</p>
+  </div>
+  <aside class="notes">
+    <p>MAE applies masked reconstruction to Vision Transformers, hiding seventy-five percent of the patches. ViTDet adapts an MAE-pretrained ViT into a detection backbone. SparK extends masked pretraining to convolutional networks such as ResNet.</p>
+    <p>Each paper evaluates against its own baselines under its own training settings, so their gains are not directly comparable. The papers also do not report results across different amounts of annotated data. All three pretrain on ImageNet, so pretraining and detection use different image sets.</p>
+  </aside>
+</section>
+
+<!-- ======================= 4. CONTROLLED ======================= -->
+<section class="slide">
+  <div class="kicker">Methodology</div>
+  <h2>A controlled comparison, not a leaderboard</h2>
+  <p class="muted" style="margin-bottom:26px">We hold everything fixed except how the backbone starts.</p>
+  <div class="three-col">
+    <div class="card">
+      <h3>One protocol</h3>
+      <p>Within each arm, the pretrained and random-init runs share the detector, augmentation, schedule, and evaluation code.</p>
+    </div>
+    <div class="card">
+      <h3>No outside data</h3>
+      <p>Pretraining uses the same COCO images the detector trains on, with annotations withheld. No ImageNet.</p>
+    </div>
+    <div class="card">
+      <h3>Label sweep</h3>
+      <p>Train on 10% to 100% of the labels, in nested splits, to see how the gain changes as labels shrink.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Our comparison controls for these factors. Within each backbone, the pretrained and random-init runs differ only in their initial weights. Pretraining uses the COCO training images with annotations removed, so no external data is involved. The comparison is repeated at ten annotation levels, from ten to one hundred percent.</p>
+  </aside>
+</section>
+
+<!-- ======================= 5. DESIGN ======================= -->
+<section class="slide">
+  <div class="kicker">Methodology</div>
+  <h2>Two runs per fraction, one difference: how the backbone starts</h2>
+  <div class="arm pre">
+    <div class="arm-title">Pretrained run</div>
+    <div class="steps">
+      <div class="step"><b>Unlabeled COCO</b><small>annotations withheld</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step"><b>Masked pretraining</b><small>MAE or SparK</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>Train detector</b><small>on k% of labels</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>COCO AP@[.5:.95]</b><small>val2017</small></div>
+    </div>
+  </div>
+  <div class="arm rand">
+    <div class="arm-title">Random-init run</div>
+    <div class="steps">
+      <div class="step"><b>Random weights</b><small>no pretraining</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>Train detector</b><small>on the same k% of labels</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step same"><b>COCO AP@[.5:.95]</b><small>val2017</small></div>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns: 1.25fr 1fr; gap: 28px; align-items: center; margin-top: 4px">
+    <div class="table-box">
+      <table>
+        <thead><tr><th>Arm</th><th>Backbone</th><th>Pretraining</th><th>Detector</th></tr></thead>
+        <tbody>
+          <tr><td>Transformer</td><td>ViT-Tiny</td><td>MAE</td><td>ViTDet</td></tr>
+          <tr><td>CNN</td><td>ResNet-18</td><td>SparK</td><td>Faster R-CNN + FPN</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <p class="small" style="margin-bottom:6px"><b>Only differences:</b> starting weights and layer-wise learning-rate decay.</p>
+      <div class="runs" style="margin-top:6px"><span class="big">2 + 40</span><span>runs</span></div>
+      <div class="small muted">2 pretraining runs, then 10 fractions &times; 2 inits &times; 2 arms</div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>At every labeled fraction we train the detector twice. In the pretrained run, the backbone first learns from the unlabeled images with MAE or SparK. In the random-init run, it starts from random weights. Apart from the starting weights, the two runs differ only in layer-wise learning-rate decay, which assigns smaller learning rates to earlier layers of a pretrained backbone. Any difference in AP@[.5:.95] is therefore attributable to pretraining.</p>
+    <p>We run this design for one transformer and one CNN, each paired with its corresponding pretraining method and detector, for two pretraining runs and forty detection runs.</p>
+  </aside>
+</section>
+
+<!-- ======================= 6. EXPERIMENTS ======================= -->
+<section class="slide">
+  <div class="kicker">Experiments</div>
+  <h2>Setup</h2>
+  <div class="two-col" style="grid-template-columns: 1fr 1.1fr">
+    <div>
+      <h3>Data</h3>
+      <ul>
+        <li>COCO 2017, 9 classes: person, bicycle, car, motorcycle, airplane, bus, train, truck, boat</li>
+        <li>18,542 training images; evaluation on val2017</li>
+        <li>Nested fractions: the 10% split sits inside the 20% split, and so on</li>
+      </ul>
+      <h3 style="margin-top:18px">Metrics</h3>
+      <ul>
+        <li>AP@[.5:.95], AP50, AP75</li>
+        <li>AP small objects (AP<sub>s</sub>), AP medium objects (AP<sub>m</sub>), AP large objects (AP<sub>l</sub>)</li>
+      </ul>
+    </div>
+    <div>
+      <div class="table-box">
+        <table>
+          <thead><tr><th>Arm</th><th class="num">Epochs</th><th class="num">Batch</th><th class="num">Iterations at 100%</th></tr></thead>
+          <tbody>
+            <tr><td>ViT-Tiny</td><td class="num">100</td><td class="num">16</td><td class="num">115,888</td></tr>
+            <tr><td>ResNet-18</td><td class="num">12</td><td class="num">16</td><td class="num">13,906</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin-top:14px">Every fraction trains for the same number of epochs, so iterations scale with the number of images.</p>
+      <p class="small muted">Hardware: 2 V100 GPUs (32 GB) per run.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>The dataset is a COCO 2017 subset with people and eight vehicle classes, roughly eighteen and a half thousand training images, evaluated on val2017. Each smaller labeled set is a subset of every larger one, so increasing the fraction only adds images.</p>
+    <p>Each detector keeps the epoch count from its original training recipe, one hundred for the ViT and twelve for ResNet-18, so smaller fractions train for fewer iterations. We report COCO average precision averaged over IoU thresholds, at fixed IoU thresholds of 0.5 and 0.75, and by object size.</p>
+  </aside>
+</section>
+
+<!-- ======================= 7. FINAL AP ======================= -->
+<section class="slide">
+  <div class="kicker">Results</div>
+  <h2>Pretraining helps most when labels are scarce</h2>
+  <div class="figure"><img src="figures/final_ap.png" alt="Final AP@[.5:.95] by labeled fraction, pretrained and random-init, for ViT-Tiny and ResNet-18"></div>
+  <div class="callout orange" style="margin:14px 0 0">
+    <div class="label">Unexpected</div>
+    <p>From 70% labels up, the random-init ViT outperforms the pretrained ViT, by 2.1 AP@[.5:.95] at 100%.</p>
+  </div>
+  <aside class="notes">
+    <p>Here is final AP@[.5:.95] against labeled fraction. Blue is pretrained, orange is random-init. In both arms AP@[.5:.95] falls as labels shrink, and the pretrained line falls more slowly.</p>
+    <p>At ten percent, the pretrained ViT reaches 11.4 AP@[.5:.95] against 8.0 with random init, and the pretrained ResNet reaches 12.0 against 7.5. At full labels the lines meet. The ViT result was unexpected: from seventy percent of the labels upward, the model trained from random weights scores higher than the pretrained one, and at full labels it leads by 2.1 points.</p>
+  </aside>
+</section>
+
+<!-- ======================= 9. OVER TRAINING ======================= -->
+<section class="slide">
+  <div class="kicker">Results</div>
+  <h2>The gap over training</h2>
+  <div class="figure"><img src="figures/ap_gap_over_training.png" alt="AP@[.5:.95] gap over training progress, odd labeled fractions in the top row and even in the bottom row, for ViT-Tiny and ResNet-18"></div>
+  <aside class="notes">
+    <p>This figure tracks the AP@[.5:.95] gap, pretrained minus random-init, during training, measured every five hundred iterations. The x-axis is the share of each run's iterations, so runs of different lengths share one axis. The top row holds 10, 30, 50, 70, and 90 percent, and the bottom row holds the even fractions. The ResNet-18 run at ten percent is short enough that it has only two evaluations.</p>
+    <p>In both backbones, the pretrained model is ahead early in training, and the gap then narrows. The more labeled data a run has, the further the gap narrows by the end. For the ViT, the gap ends below zero at seventy percent and above, and it varies much less after the first learning-rate step, eight-ninths of the way through training. At eighty percent and above, the ViT gap is still decreasing when training ends, so the random-init ViT had not stopped gaining on the pretrained one. For ResNet-18, the gap at seventy percent and above ends near zero.</p>
+  </aside>
+</section>
+
+<!-- ======================= 10. BREAKDOWN ======================= -->
+<section class="slide">
+  <div class="kicker">Results</div>
+  <h2>Where the gain comes from</h2>
+  <div class="figure"><img src="figures/metric_gap.png" alt="Gap by labeled fraction for each COCO metric, for ViT-Tiny and ResNet-18"></div>
+  <div class="reading" style="margin-top:14px">
+    <ul>
+      <li><b>10% to 30%:</b> every metric favors pretrained in both arms; at 10% the largest gap in both arms is AP50.</li>
+      <li><b>80% to 100%:</b> every metric favors random-init for the ViT; ResNet-18 gaps stay within 1.3 points.</li>
+    </ul>
+  </div>
+  <aside class="notes">
+    <p>This breaks the gap down by IoU threshold and object size, at every labeled fraction.</p>
+    <p>At low label fractions, pretraining improves every metric for both backbones, with the largest improvement in AP50, the lenient overlap threshold that primarily reflects whether objects are detected. At high label fractions, the random-init ViT outperforms the pretrained ViT on every metric, while the two ResNet-18 runs are roughly equal.</p>
+  </aside>
+</section>
+
+<!-- ======================= 11. LIMITATIONS ======================= -->
+<section class="slide">
+  <div class="kicker">Limitations</div>
+  <h2>What limits these conclusions</h2>
+  <div class="table-box">
+    <table class="risk">
+      <thead><tr><th>Limitation</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>One seed per run</td><td>We cannot tell how much of a small gap is run-to-run noise, including the random-init ViT's lead from 70% labels up.</td></tr>
+        <tr><td>Tiny backbones</td><td>ViT-Tiny and ResNet-18 score well below the larger backbones in the original papers.</td></tr>
+        <tr><td>Reduced dataset</td><td>Training on 18,542 images of 9 classes lowers absolute AP@[.5:.95] further. ViTs need more data than CNNs, and MAE pretrained on these 18,542 images instead of ImageNet's 1.28 million, which may explain the random-init ViT's lead from 70% labels up.</td></tr>
+        <tr><td>ViT batch size reduced</td><td>64 in the ViTDet recipe, 16 here to fit 2 V100 GPUs, with the learning rate scaled down to match.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="notes">
+    <p>Each configuration was trained once, so small differences may fall within run-to-run variation, and that includes the random-init ViT outperforming the pretrained ViT at high label fractions. Our models and dataset are far smaller than those in the original papers, which keeps our absolute scores well below theirs. Vision Transformers are known to need more training data than CNNs, and our MAE pretraining saw only about eighteen and a half thousand images, compared with 1.28 million in the MAE paper, which may explain why the pretrained ViT falls behind once enough labels are available. The ViT was also trained with sixteen images per batch instead of the recipe's sixty-four to fit GPU memory, with the learning rate reduced proportionally.</p>
+  </aside>
+</section>
+
+<!-- ======================= 12. FUTURE WORK ======================= -->
+<section class="slide">
+  <div class="kicker">Future work</div>
+  <h2>Future work</h2>
+  <p class="muted" style="margin-bottom:26px">Limited compute restricted this study to a first look at the trend. Scaling each part of it up would give a more complete picture.</p>
+  <div class="three-col">
+    <div class="card">
+      <h3>Repeated seeds</h3>
+      <p>Several seeds per run, to put error bars on each gap.</p>
+    </div>
+    <div class="card">
+      <h3>Larger backbones</h3>
+      <p>ViT-B and ResNet-50, the sizes the original papers used.</p>
+    </div>
+    <div class="card">
+      <h3>Full COCO</h3>
+      <p>All 80 classes and 118k training images.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>With the compute available, this study could only establish the general shape of the trend. A fuller picture would come from repeating every configuration with multiple seeds to quantify variance, scaling to the backbone sizes used in the original papers, and training on the full COCO dataset.</p>
+  </aside>
+</section>
+
+<!-- ======================= 13. CLOSE ======================= -->
+<section class="slide close">
+  <div class="kicker">Summary</div>
+  <div class="takeaway">Masked pretraining on the same unlabeled images helps most when labels are scarce, in both a transformer and a CNN. With all labels, the gain disappears.</div>
+  <div class="links">
+    <div><b>Code:</b> github.com/johne16/cs5243_project</div>
+  </div>
+  <div style="margin-top:56px; font-size: 40px; font-weight: 700">Thank you</div>
+  <aside class="notes">
+    <p>In summary, masked pretraining on unlabeled images improves detection when annotations are scarce, for both a transformer and a CNN. With the full annotated set the benefit disappears, and the randomly initialized ViT performs better. Thank you, we're happy to take questions.</p>
+  </aside>
+</section>
+
+</div></div>
+
+<div id="controls">
+  <button id="prev" title="Previous (&larr;)">&#8592;</button>
+  <span id="counter">1 / 12</span>
+  <button id="next" title="Next (&rarr;)">&#8594;</button>
+  <button id="notesBtn" title="Speaker notes (N)">Notes</button>
+  <button id="fsBtn" title="Fullscreen (F)">&#x26F6;</button>
+</div>
+
+<div id="notes">
+  <div class="head"><span id="notesTitle">Speaker notes</span><span>Elapsed <span id="timer">0:00</span> &middot; target 8–10 min</span></div>
+  <div id="notesBody"></div>
+</div>
+
+<script>
+(function () {
+  const root = document.getElementById("root");
+  const slides = Array.from(document.querySelectorAll(".slide"));
+  const stage = document.getElementById("stage");
+  const counter = document.getElementById("counter");
+  const notesBody = document.getElementById("notesBody");
+  const notesTitle = document.getElementById("notesTitle");
+  let i = 0;
+  const fromHash = parseInt(location.hash.slice(1), 10);
+  if (fromHash >= 1 && fromHash <= slides.length) i = fromHash - 1;
+
+  function fit() {
+    const narrow = window.innerWidth < 760;
+    document.body.classList.toggle("mobile", narrow);
+    if (narrow) { document.documentElement.style.setProperty("--notes-h", "0px"); stage.style.transform = "none"; return; }
+    const notesH = root.classList.contains("show-notes") ? Math.round(window.innerHeight * 0.3) : 0;
+    document.documentElement.style.setProperty("--notes-h", notesH + "px");
+    const w = window.innerWidth, h = window.innerHeight - notesH;
+    const s = Math.min((w - 32) / 1280, h / 720) * 0.97;
+    stage.style.transform = "scale(" + s + ")";
+  }
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle("active", k === i));
+    counter.textContent = (i + 1) + " / " + slides.length;
+    const notes = slides[i].querySelector("aside.notes");
+    notesBody.innerHTML = notes ? notes.innerHTML : "";
+    notesTitle.textContent = "Speaker notes · slide " + (i + 1);
+    try { history.replaceState(null, "", "#" + (i + 1)); } catch (e) {}
+  }
+
+  // timer starts on first navigation
+  let start = null;
+  const timerEl = document.getElementById("timer");
+  setInterval(() => {
+    if (!start) return;
+    const s = Math.floor((Date.now() - start) / 1000);
+    timerEl.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }, 500);
+  function go(n) { if (!start && n !== i) start = Date.now(); show(n); }
+
+  function toggleNotes() { root.classList.toggle("show-notes"); fit(); }
+  function toggleFs() {
+    if (!document.fullscreenElement) { try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+    else { try { document.exitFullscreen(); } catch (e) {} }
+  }
+
+  document.addEventListener("keydown", e => {
+    if (["ArrowRight", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); go(i + 1); }
+    else if (["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); go(i - 1); }
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(slides.length - 1);
+    else if (e.key === "n" || e.key === "N") toggleNotes();
+    else if (e.key === "f" || e.key === "F") toggleFs();
+    else if (e.key === "t" || e.key === "T") { start = Date.now(); timerEl.textContent = "0:00"; }
+  });
+  document.getElementById("prev").onclick = () => go(i - 1);
+  document.getElementById("next").onclick = () => go(i + 1);
+  document.getElementById("notesBtn").onclick = toggleNotes;
+  document.getElementById("fsBtn").onclick = toggleFs;
+
+  let tx = null;
+  document.addEventListener("touchstart", e => { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener("touchend", e => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) go(i + (dx < 0 ? 1 : -1));
+    tx = null;
+  });
+
+  // show controls briefly on mouse move, then fade for clean recording
+  let hideT;
+  document.addEventListener("mousemove", () => {
+    root.classList.remove("hide-ui");
+    clearTimeout(hideT);
+    hideT = setTimeout(() => root.classList.add("hide-ui"), 2000);
+  });
+
+  window.addEventListener("resize", fit);
+  fit(); show(i);
+})();
+</script>
+</div>

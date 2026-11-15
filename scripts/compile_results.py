@@ -7,7 +7,8 @@ logs_dir = root_dir / "logs"
 results_dir = root_dir / "results"
 
 arm_names = {"vit": "ViT-Tiny", "resnet18": "ResNet-18"}
-metric_names = ["AP", "AP50", "AP75", "APs", "APm", "APl"]
+init_names = {"pretrained": "pretrained", "scratch": "random-init"}
+metric_names = ["AP@[.5:.95]","AP50", "AP75", "APs", "APm", "APl"]
 
 run_pattern = re.compile(r"(pretrained|scratch)_(\d+)")
 iter_pattern = re.compile(r"d2\.utils\.events\]:.* iter: (\d+)")
@@ -17,7 +18,7 @@ result_pattern = re.compile(r"copypaste: ([\d.]+(?:,[\d.]+){5})\s*$")
 def parse_log(log_path):
     text = log_path.read_text(errors="replace")
     run = run_pattern.search(text)
-    init, fraction = run.group(1), int(run.group(2))
+    init, fraction = init_names[run.group(1)], int(run.group(2))
     arm = arm_names[log_path.name.split("-")[1]]
 
     evals = []

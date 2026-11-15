@@ -7,6 +7,8 @@
 - Box annotation is expensive
 - Detection accuracy falls when labeled data is scarce
 - Question: how much does masked-image pretraining on unlabeled images help, and how does that change as labels shrink
+- Hypothesis: AP drops for both pretrained and scratch as the labeled fraction shrinks, but more slowly for pretrained, so the gap widens at small fractions
+- Hypothesis: both arms show the widening gap, larger for ViT because it lacks the convolutional inductive bias
 
 ## 2. Related Work (1 min)
 
@@ -33,7 +35,6 @@
 ## 5. Results (2.5 min)
 
 - Final AP against labeled fraction, pretrained and scratch, per arm
-- AP gap against labeled fraction, per arm
 - AP over training
 - AP50, AP75, and size breakdown
 
